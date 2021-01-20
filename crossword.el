@@ -862,6 +862,9 @@ grid position, and updates the puzzle's completion statistics."
         (crossword--next-square-in-clue 'wrap)
       (crossword--next-logical-square))))
 
+(defun crossword--char-affects-statistics (char)
+  (string-match "[[:upper:]]" char))
+
 (defun crossword--insert-char (char)
   "Insert a character into a crossword grid square."
     (let ((inhibit-read-only t)
@@ -869,15 +872,11 @@ grid position, and updates the puzzle's completion statistics."
           (char-current (buffer-substring-no-properties (point) (1+ (point))))
           (face-at-point (get-text-property (point) 'face)))
       ;; ** Update puzzle completion stastics
-      (cond
-       ((string-match "[[:upper:]]" char-to-insert)
-        (unless (string-match "[[:upper:]]" char-current)
-          (cl-incf crossword--completed-count)))
-       (t ; ie. (not (string-match "[[:upper:]]" char-to-insert))
-        (when (string-match "[[:upper:]]" char-current)
-          (cl-decf crossword--completed-count))))
-      (save-excursion
-        (crossword--update-completion-statistics-display))
+      (cl-incf crossword--completed-count
+               (save-match-data
+                 (+ (if (crossword--char-affects-statistics char-to-insert) 1 0)
+                    (if (crossword--char-affects-statistics char-current) -1 0))))
+      (save-excursion (crossword--update-completion-statistics-display))
 
       ;; ** Insert a character into grid
       (forward-char)
