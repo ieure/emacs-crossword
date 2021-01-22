@@ -380,15 +380,15 @@ could be several fields distant."
 
 (defcustom crossword-download-puz-alist '(
   ("Universal Daily (Daily 15x15)"
-     "http://herbach.dnsalias.com/uc/uc<YY><MM><DD>.puz")
+     "http://herbach.dnsalias.com/uc/uc%y%m%d.puz")
   ("Universal Daily (Sunday bonus, 21x21)"
-     "http://herbach.dnsalias.com/uc/ucs<YY><MM><DD>.puz")
+     "http://herbach.dnsalias.com/uc/ucs%y%m%d.puz")
   ("Wall Street Journal (Mondays-Saturddays)"
-     "http://herbach.dnsalias.com/wsj/wsj<YY><MM><DD>.puz")
+     "http://herbach.dnsalias.com/wsj/wsj%y%m%d.puz")
   ("Washington Post (Sundays)"
-     "http://herbach.dnsalias.com/WaPo/wp<YY><MM><DD>.puz")
+     "http://herbach.dnsalias.com/WaPo/wp%y%m%d.puz")
   ("Matt Jones' (Thursdays)"
-     "http://herbach.dnsalias.com/Jonesin/jz<YY><MM><DD>.puz"))
+     "http://herbach.dnsalias.com/Jonesin/jz%y%m%d.puz"))
   "Download resources for .puz files."
   :type '(repeat (list (string :tag "Resource description")
                        (string :tag "URL"))))
@@ -396,15 +396,15 @@ could be several fields distant."
 
 (defcustom crossword-download-xml-alist '(
   ("Los Angeles Times" .
-     "http://cdn.games.arkadiumhosted.com/latimes/assets/DailyCrossword/la<YY><MM><DD>.xml")
+     "http://cdn.games.arkadiumhosted.com/latimes/assets/DailyCrossword/la%y%m%d.xml")
   ("Newsday" .
-     "http://picayune.uclick.com/comics/crnet/data/crnet<YY><MM><DD>-data.xml")
+     "http://picayune.uclick.com/comics/crnet/data/crnet%y%m%d-data.xml")
   ("USA Today (Monday-Saturday?)" .
-     "http://picayune.uclick.com/comics/usaon/data/usaon<YY><MM><DD>-data.xml")
+     "http://picayune.uclick.com/comics/usaon/data/usaon%y%m%d-data.xml")
   ("Universal" .
-     "http://picayune.uclick.com/comics/fcx/data/fcx<YY><MM><DD>-data.xml")
+     "http://picayune.uclick.com/comics/fcx/data/fcx%y%m%d-data.xml")
   ("LA Times Sunday" .
-     "http://picayune.uclick.com/comics/lacal/data/lacal<YY><MM><DD>-data.xml"))
+     "http://picayune.uclick.com/comics/lacal/data/lacal%y%m%d-data.xml"))
   "Download resources for .xml file.
 NOTE: Support for this file format has not yet been written!"
   :type '(repeat (cons (string :tag "Resource description")
@@ -846,40 +846,6 @@ sucess."
     (t nil))))
 
 
-(defun crossword--calendar-read-date (&optional noday)
-  "Prompt for Gregorian date.  Return a list (month day year).
-If optional NODAY is t, does not ask for day, but just returns
-\(month 1 year); if NODAY is any other non-nil value the value
-returned is \(month year).
-
-This function is (hopefully) a temporary replacement for function
-`calendar-read-date' of package calendar.el. See <--oops--> on
-the Emacs <--oops--> list for the relevant discussion and patch
-submission."
-  (let* ((today (calendar-current-date))
-         (year (calendar-read
-                "Year (>0): "
-                (lambda (x) (> x 0))
-                (number-to-string (calendar-extract-year today))))
-         (month-array calendar-month-name-array)
-         (completion-ignore-case t)
-         (month (cdr (assoc-string
-                       (completing-read
-                        "Month name: "
-                        (mapcar #'list (append month-array nil))
-                        nil t nil nil
-                        (aref month-array (1- (calendar-extract-month today))))
-                      (calendar-make-alist month-array 1) t)))
-         (last (calendar-last-day-of-month month year)))
-    (if noday
-        (if (eq noday t)
-            (list month 1 year)
-          (list month year))
-      (list month
-            (calendar-read (format "Day (1-%d): " last)
-                           (lambda (x) (and (< 0 x) (<= x last)))
-                           (number-to-string (calendar-extract-day today)))
-            year))))
 
 
 (defun crossword--window-resize-function (frame)
@@ -2532,41 +2498,25 @@ on their entry."
 
 
 ;;;###autoload
-(defun crossword-download (&optional from date)
+(defun crossword-download (from date)
   "Download a crossword puzzle from the network.
 Optional arg FROM is a download source, expected to be `equal' to
 the CAR of an element of `crossword-download-puz-alist'. Optional
 arg DATE is expected to be a list of integers '(mm dd yyy)."
   ;; TODO: Allow the arg 'from' to be url.
-  (interactive)
+  (interactive (list
+                (completing-read "Download from: "
+                                 (mapcar #'car crossword-download-puz-alist) nil t)
+                (date-to-time (concat (org-read-date nil) " 00:00:00"))))
   (unless (crossword--check-and-create-save-path)
     (user-error "No existing download path configured"))
-  (let (entry url
-        (save-dir (expand-file-name crossword-save-path)))
-   (if from
-     (unless (setq entry (assoc from crossword-download-puz-alist))
-       (error "Unrecognized download resource: %s" from))
-    (setq from (completing-read "Download from: "
-      (mapcar (lambda (x) (car x)) crossword-download-puz-alist) nil t))
-    (setq entry (assoc from crossword-download-puz-alist)))
    ;; NOTE: Earlier commits included here logic to check the day of the
    ;; week against a sub-list in the relevant entry of
    ;; `crossword-download-puz-alist' and reject mis-matches. The code
    ;; and the data structure element were removed because the
    ;; information was shown to be inaccurate and ever-changing. Now,
    ;; include a short note in an entry's description.
-   (while (not date)
-     (condition-case nil
-       (setq date (crossword--calendar-read-date))
-     (end-of-file (read-key "You must enter day of month.
-Press any key to continue."))))
-   (setq url
-     (replace-regexp-in-string "<DD>"   (format "%02d" (cadr date))
-       (replace-regexp-in-string "<MM>"   (format "%02d" (car date))
-         (replace-regexp-in-string "<YY>"   (format "%02d" (% (caddr date) 100))
-           (replace-regexp-in-string "<YYYY>" (format "%04d" (caddr date))
-             (cadr entry))))))
-   (crossword--download url save-dir from)))
+  (crossword--download (format-time-string (cadr (assoc from crossword-download-puz-alist)) date) crossword-save-path from))
 
 
 ;;;###autoload
