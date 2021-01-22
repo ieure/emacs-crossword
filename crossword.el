@@ -786,26 +786,25 @@ expects the current buffer to be the crossword grid-buffer."
 (defun crossword--update-grid-clues (this-clue-across this-clue-down)
   "Update the clue text appearing below the crossword grid.
 THIS-CLUE-ACROSS and THIS-CLUE-DOWN are integers values."
-  (let ((return-pos (point))
-        elem)
-    (goto-char crossword--grid-end)
-    (delete-region (point) (point-max))
-    (setq return-pos (min return-pos (point-max)))
-    (insert
-      (format " Across:\n\n%s\n Down:\n\n%s%s"
-        (if (not this-clue-across) ""
-         (setq elem (assq this-clue-across crossword--across-clue-list))
-         (with-current-buffer crossword--across-buffer
-           (buffer-substring (nth 4 elem) (nth 5 elem))))
-        (if (not this-clue-down) ""
-         (setq elem (assq this-clue-down crossword--down-clue-list))
-         (with-current-buffer crossword--down-buffer
-           (buffer-substring (nth 3 elem) (nth 4 elem))))
-        (if (not (setq elem (get-text-property return-pos 'errors))) ""
-         (format "\n Errors:\n\n  %s"
-                 (propertize (substring (format "%s" elem) 1 -1)
-                             'face 'crossword-error-inverse-face)))))
-    (goto-char return-pos)))
+  (save-excursion
+    (let ((start (point))
+          elem)
+      (goto-char crossword--grid-end)
+      (delete-region (point) (point-max))
+      (insert
+       (format " Across:\n\n%s\n Down:\n\n%s%s"
+               (if (not this-clue-across) ""
+                 (setq elem (assq this-clue-across crossword--across-clue-list))
+                 (with-current-buffer crossword--across-buffer
+                   (buffer-substring (nth 4 elem) (nth 5 elem))))
+               (if (not this-clue-down) ""
+                 (setq elem (assq this-clue-down crossword--down-clue-list))
+                 (with-current-buffer crossword--down-buffer
+                   (buffer-substring (nth 3 elem) (nth 4 elem))))
+               (if (not (setq elem (get-text-property start 'errors))) ""
+                 (format "\n Errors:\n\n  %s"
+                         (propertize (substring (format "%s" elem) 1 -1)
+                                     'face 'crossword-error-inverse-face))))))))
 
 
 (defun crossword--update-completion-statistics-display ()
@@ -939,8 +938,7 @@ grid position, and updates the puzzle's completion statistics."
     (let ((inhibit-read-only t)
           (char-to-insert (upcase (string char)))
           (char-current (buffer-substring-no-properties (point) (1+ (point))))
-          (face-at-point (get-text-property (point) 'face))
-          (goto-pos (point)))
+          (face-at-point (get-text-property (point) 'face)))
       ;; ** Update puzzle completion stastics
       (cond
        ((string-match "[[:upper:]]" char-to-insert)
@@ -949,9 +947,9 @@ grid position, and updates the puzzle's completion statistics."
        (t ; ie. (not (string-match "[[:upper:]]" char-to-insert))
         (when (string-match "[[:upper:]]" char-current)
           (cl-decf crossword--completed-count))))
-      (crossword--update-completion-statistics-display)
-      (goto-char goto-pos)
-      (setq goto-pos nil)
+      (save-excursion
+        (crossword--update-completion-statistics-display))
+
       ;; ** Insert a character into grid
       (forward-char)
       (insert-and-inherit char-to-insert)
@@ -987,14 +985,13 @@ If POS is NIL, acts on POINT. In this context, 'empty' means not
       (let* ((inhibit-read-only t)
              (seconds (cl-incf crossword--timer-elapsed))
              (minutes (min (/ seconds 60) 99))
-             (seconds (% seconds 60))
-             (pos (point)))
-        (goto-char crossword--timer-value-pos)
-        (re-search-forward "....." nil t)
-        (replace-match
-          (propertize (format "%02d:%02d" minutes seconds)
-            'face 'crossword-checked-face))
-        (goto-char pos)))))
+             (seconds (% seconds 60)))
+        (save-excursion
+          (goto-char crossword--timer-value-pos)
+          (re-search-forward "....." nil t)
+          (replace-match
+           (propertize (format "%02d:%02d" minutes seconds)
+                       'face 'crossword-checked-face)))))))
 
 
 (defun crossword--local-vars-list ()
@@ -1296,7 +1293,7 @@ are substrings of the puzzle file."
               crossword--down-clue-list)))
         (put-text-property pos (1+ pos) 'answer (substring answer-grid 0 1))
         (setq answer-grid (substring answer-grid 1)))
-      (goto-char (setq pos (1+ pos))))
+      (goto-char (cl-incf pos)))
     (setq crossword--grid-end (+ 2 (goto-char (point-max))))
     (insert "\n\n Across:\n\n\n\n Down:")
     (goto-char start-pos)
@@ -2284,15 +2281,15 @@ Similar to `crossword-check-letter', See there for details."
   "Check the entire puzzle for errors.
 Similar to `crossword-check-letter', See there for details."
   (interactive)
-  (let ((orig-pos (point))
-        (pos crossword--first-square)
+  (let ((pos crossword--first-square)
         (end crossword--last-square))
-    (while (< pos end)
-      (goto-char pos)
-      (when (get-text-property pos 'answer)
-        (crossword-check-letter))
-      (setq pos (1+ pos)))
-    (goto-char orig-pos)
+    (save-excursion
+      (while (< pos end)
+        (goto-char pos)
+        (when (get-text-property pos 'answer)
+          (crossword-check-letter))
+        (setq pos (1+ pos))))
+
     (let ((inhibit-read-only t))
       (crossword--update-grid-clues
         (get-text-property orig-pos 'clue-across)
