@@ -2425,9 +2425,8 @@ Default is to advance one column."
 Prompt to save current state, then kill buffers, windows, and frame."
   (interactive)
   (when (and (called-interactively-p 'interactive)
-             (condition-case nil
-               (set-buffer "Crossword grid")
-               (error nil))
+             (ignore-errors
+               (set-buffer "Crossword grid"))
              (pop-to-buffer "Crossword grid")
              crossword--filename
              (yes-or-no-p "Save current puzzle state before quitting? "))
@@ -2452,11 +2451,9 @@ Prompt to save current state, then kill buffers, windows, and frame."
         (kill-buffer buf))
     (if crossword-quit-to-browser
       (crossword-summary)
-     (condition-case nil
-       (progn
+       (ignore-errors
          (select-frame-by-name "Crossword")
-         (delete-frame nil))
-       (error nil)))))
+         (delete-frame nil)))))
 
 
 
