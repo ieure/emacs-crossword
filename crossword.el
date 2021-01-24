@@ -2114,15 +2114,13 @@ basename, and with an extension `.puz-emacs'."
   (message "Puzzle backup saved: %s" filename)))
 
 
-(defun crossword-restore (&optional file)
+(defun crossword-restore (file)
   "Restore a puzzle saved using function `crossword-backup'.
 Prompts for FILE if not provided. This function expects that the
 crossword frame/windows/buffers environment exists."
-  (interactive)
-  (unless file
-    (setq file (read-file-name "Puzzle file to restore: "
-                               crossword-save-path nil t nil
-                               (lambda (x) (string-match "\\.puz-emacs$" x)))))
+  (interactive (list (read-file-name "Puzzle file to restore: "
+                                     crossword-save-path nil t nil
+                                     (lambda (x) (string-match "\\.puz-emacs$" x)))))
   (let* ((grid-buffer   (current-buffer))
          (across-buffer crossword--across-buffer)
          (down-buffer   crossword--down-buffer)
