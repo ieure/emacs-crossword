@@ -1364,7 +1364,7 @@ GRID-WINDOW is the dedicated crossword-grid window."
    (crossword--update-faces)))
 
 
-(defun crossword--start-game (&optional puz-file)
+(defun crossword--start-game (puz-file)
   "Start a crossword puzzle session.
 Prompts for a compatable puzzle file unless optional PUZ-FILE is
 provided, prepares the frame/window/buffer environment, parses
@@ -1377,10 +1377,6 @@ Buffers \"Crossword across\" and \"Crossword down\" list the
 puzzle's clues."
   (let (grid-window across-window down-window
         across-buffer down-buffer)
-   (unless puz-file
-     (while (not (file-readable-p
-                   (setq puz-file
-                     (read-file-name "Puzzle file: " nil nil t nil))))))
    (select-frame (make-frame (list '(name . "Crossword"))))
 ;; FIXME: see TODO note at end of file
 ;; (setq delete-frame-functions (list #'crossword-quit))
