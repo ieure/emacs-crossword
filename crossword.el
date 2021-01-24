@@ -458,6 +458,10 @@ These mark un-writable positions of the grid. This variable is
 used to auto-advance to the next across position when inserting a
 character.")
 
+(defconst crossword--grid-name "Crossword grid")
+(defconst crossword--across-name "Crossword across")
+(defconst crossword--down-name "Crossword down")
+(defconst crossword--list-name "Crossword list")
 
 
 ;;
@@ -469,7 +473,7 @@ character.")
 (defvar-local crossword--across-buffer nil)
 (defvar-local crossword--down-buffer   nil)
 
-;; Useful static positions within a "Crossword grid" buffer.
+;; Useful static positions within a crossword--grid-name buffer.
 (defvar-local crossword--first-square nil)
 (defvar-local crossword--last-square nil)
 (defvar-local crossword--timer-state-pos 0)
@@ -907,7 +911,7 @@ If POS is NIL, acts on POINT. In this context, 'empty' means not
   "Update the timer and its display."
   ;; FIXME: Does not update when buffer visible but not selected
   (when (< crossword--timer-elapsed 5999) ; Don't overflow mm:ss format
-    (with-current-buffer "Crossword grid"
+    (with-current-buffer crossword--grid-name
       (let* ((inhibit-read-only t)
              (seconds (cl-incf crossword--timer-elapsed))
              (minutes (min (/ seconds 60) 99))
@@ -1340,7 +1344,7 @@ puzzle's clues."
    ;; Create window and buffer for grid
    (setq grid-window (selected-window))
    (buffer-disable-undo
-     (switch-to-buffer (get-buffer-create "Crossword grid")
+     (switch-to-buffer (get-buffer-create crossword--grid-name)
                        'norecord 'force))
    (delete-other-windows)
 
@@ -1354,7 +1358,7 @@ puzzle's clues."
    (buffer-disable-undo
      (switch-to-buffer
        (setq across-buffer
-         (get-buffer-create "Crossword across"))
+         (get-buffer-create crossword--across-name))
        'norecord 'force))
    (erase-buffer) ; Unnecessary, but satisfies neuroses.
    (face-remap-add-relative 'default :family "Monospace")
@@ -1364,7 +1368,7 @@ puzzle's clues."
      t)
    (buffer-disable-undo
      (switch-to-buffer
-       (setq down-buffer (get-buffer-create "Crossword down"))
+       (setq down-buffer (get-buffer-create crossword--down-name))
        'norecord 'force))
    (erase-buffer) ; Unnecessary, but satisfies neuroses.
    ;; ** Balance windows now so we can properly fill-paragraphs
@@ -1388,14 +1392,12 @@ puzzle's clues."
   "For variable `tabulated-list-entries'.
 Output is a list, each element of which is (ID [STRING ..
 STRING])."
-  (let (data result
-        (orig-buf (current-buffer))
+  (let ((result nil)
         (id 0)
-        (temp-buf (set-buffer (get-buffer-create "Crossword temporary"))))
-    (insert-file-contents (crossword--summary-file))
-    (setq data (read temp-buf))
-    (kill-buffer temp-buf)
-    (set-buffer orig-buf)
+        (data (with-temp-buffer
+                       (insert-file-contents (crossword--summary-file))
+                       (read (current-buffer)))))
+
     (dolist (elem data result)
       (push (list (cl-incf id) (seq--into-vector elem)) result))))
 
@@ -1464,13 +1466,18 @@ See function `crossword-summary-rebuild-data' for details."
 (defun crossword--summary-data-puz-emacs (file)
   "Get summary data for .puz-emacs FILE.
 See function `crossword-summary-rebuild-data' for details."
-  (let ((temp-buf (set-buffer (get-buffer-create "Crossword temporary")))
-        (inhibit-read-only t))
-    (insert-file-contents file)
+  (cl-destructuring-bind (puz data)
+      (with-temp-buffer
+        (insert-file-contents file)
+        (let ((out nil))
+          (push (read (current-buffer)) out)
+          (read (current-buffer))
+          (push (read (current-buffer)) out)
+          (nreverse out)))
+
     (with-temp-buffer
-      (insert (read temp-buf)) ; grid-buf contents
-      (read temp-buf) ; POINT in grid-buf (not needed)
-      (dolist (elem (read temp-buf))
+      (insert puz)
+      (dolist (elem data)
         (set (car elem) (cdr elem)))
       (setq crossword--filename file)
       (crossword--summary-add-current))))
@@ -2076,17 +2083,15 @@ crossword frame/windows/buffers environment exists."
   (interactive (list (read-file-name "Puzzle file to restore: "
                                      crossword-save-path nil t nil
                                      (lambda (x) (string-match "\\.puz-emacs$" x)))))
-  (let* ((grid-buffer   (current-buffer))
-         (across-buffer crossword--across-buffer)
+  (let* ((across-buffer crossword--across-buffer)
          (down-buffer   crossword--down-buffer)
-         (temp-buf (set-buffer (get-buffer-create "Crossword temporary")))
          (inhibit-read-only t)
          grid-pos
          across-clue-list down-clue-list)
-   (insert-file-contents file)
-   (pop-to-buffer grid-buffer)
+
    (erase-buffer)
-   (insert (read temp-buf))
+   (insert (with-temp-buffer (insert-file-contents file)
+                             (read (current-buffer))))
    (setq grid-pos (read temp-buf))
    (dolist (elem (read temp-buf))
      (set (car elem) (cdr elem)))
@@ -2103,7 +2108,6 @@ crossword frame/windows/buffers environment exists."
                             'clue-down
                             down-clue-list
                             "--- Down clues for crossword")
-   (pop-to-buffer grid-buffer)
    (goto-char grid-pos)
    (crossword--update-faces 'force)))
 
@@ -2298,7 +2302,6 @@ state. Internally, each entry is a list of ten strings:
    9: num errors
   10: timer elapsed time."
   (let ((orig-buf (current-buffer))
-        tmp-buf ; necessary?
         result)
     (dolist (file (crossword--puzzle-file-list) result)
       (push (if (string-match "\\.puz$" file)
@@ -2307,8 +2310,6 @@ state. Internally, each entry is a list of ten strings:
             result))
     (with-temp-file (crossword--summary-file)
       (prin1 result (current-buffer)))
-    (when (setq tmp-buf (get-buffer "Crossword temporary"))
-      (kill-buffer tmp-buf)) ; necessary?
     (set-buffer orig-buf)))
 
 
@@ -2373,8 +2374,8 @@ Prompt to save current state, then kill buffers, windows, and frame."
   (interactive)
   (when (and (called-interactively-p 'interactive)
              (ignore-errors
-               (set-buffer "Crossword grid"))
-             (pop-to-buffer "Crossword grid")
+               (set-buffer crossword--grid-name))
+             (pop-to-buffer crossword--grid-name)
              crossword--filename
              (yes-or-no-p "Save current puzzle state before quitting? "))
     (crossword-backup)
@@ -2384,17 +2385,16 @@ Prompt to save current state, then kill buffers, windows, and frame."
         (write-region nil nil (crossword--summary-file) 'append))))
   (message "")
   (let ((crossword-quit-to-browser
-          (unless (equal "Crossword list" (buffer-name))
+          (unless (equal crossword--list-name (buffer-name))
             crossword-quit-to-browser))
          buf)
-    (dolist (buf-str '("Crossword across"
-                       "Crossword down"
-                       "Crossword list"
-                       "Crossword temporary"))
-      (when (setq buf (get-buffer buf-str))
+    (dolist (buf (list crossword--across-buffer
+                       crossword--down-buffer
+                       crossword--list-name))
+      (when (setq buf (get-buffer buf))
         (kill-buffer buf)))
     (when (and (called-interactively-p 'interactive)
-               (setq buf (get-buffer "Crossword grid")))
+               (setq buf (get-buffer crossword--grid-name)))
         (kill-buffer buf))
     (if crossword-quit-to-browser
       (crossword-summary))))
@@ -2414,10 +2414,10 @@ on their entry."
   (interactive)
   (unless (crossword--check-and-create-save-path)
     (crossword-quit))
-  (when (get-buffer "Crossword grid")
+  (when (get-buffer crossword--grid-name)
     (user-error "Game in progress"))
-  (unless (get-buffer "Crossword list")
-    (pop-to-buffer (set-buffer (get-buffer-create "Crossword list")))
+  (unless (get-buffer crossword--list-name)
+    (pop-to-buffer (set-buffer (get-buffer-create crossword--list-name)))
     (setq window-size-change-functions
       ;; FIXME: Maybe 'add-to-list' instead?
       (list #'crossword--window-resize-function))
