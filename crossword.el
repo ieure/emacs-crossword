@@ -847,43 +847,6 @@ sucess."
 
 
 
-
-(defun crossword--window-resize-function (frame)
-  "How to respond to window/frame resize events.
-FRAME is expected to be the `selected-frame'. This function is
-meant for variable `window-size-change-functions'. It rebalances
-the frame's three windows, auto-fills the contents of the two
-clue listing buffers, and updates the clue data-structures."
-)
-;;(when (equal "Crossword"
-;;             (cdr (assq 'name (frame-parameters frame))))
-;;;; (if window buffer is "Crossword list" then maybe print tabulated list ?
-;;  (balance-windows)
-;;  ;; snippet based upon part of function `crossword--start-game-puz'
-;;  (let ((grid-buffer      (set-buffer "Crossword grid"))
-;;        (across-buffer    crossword--across-buffer)
-;;        (down-buffer      crossword--down-buffer)
-;;        (across-clue-list crossword--across-clue-list)
-;;        (down-clue-list   crossword--down-clue-list)
-;;        (inhibit-read-only t))
-;;    (cl-flet ((strip2 (x) (mapcar (lambda (elem) (butlast elem 2)) x)))
-;;      (setq across-clue-list
-;;        (crossword--insert-clues across-buffer
-;;                                 'clue-across
-;;                                 (strip2 across-clue-list)
-;;                                 "--- Across clues for crossword"))
-;;      (setq down-clue-list
-;;        (crossword--insert-clues down-buffer
-;;                                 'clue-down
-;;                                 (strip2 down-clue-list)
-;;                                 "--- Down clues for crossword")))
-;;    ;; ** Finish in grid buffer
-;;    (set-buffer "Crossword grid")
-;;    (setq crossword--across-clue-list across-clue-list
-;;          crossword--down-clue-list   down-clue-list)
-;;    (crossword--update-faces 'force))))
-
-
 (defun crossword-self-insert (char)
   "Handle insertions for the 'Crossword grid' buffer.
 
@@ -1375,18 +1338,13 @@ Buffers \"Crossword across\" and \"Crossword down\" list the
 puzzle's clues."
   (let (grid-window across-window down-window
         across-buffer down-buffer)
-   (select-frame (make-frame (list '(name . "Crossword"))))
-;; FIXME: see TODO note at end of file
-;; (setq delete-frame-functions (list #'crossword-quit))
-   (setq window-size-change-functions
-     ;; FIXME: Maybe 'add-to-list' instead?
-     (list #'crossword--window-resize-function))
    ;; Create window and buffer for grid
    (setq grid-window (selected-window))
    (buffer-disable-undo
      (switch-to-buffer (get-buffer-create "Crossword grid")
                        'norecord 'force))
-   (set-window-dedicated-p grid-window t)
+   (delete-other-windows)
+
    (crossword-mode)
    (setq header-line-format " Crossword grid")
    (erase-buffer)
@@ -1399,7 +1357,6 @@ puzzle's clues."
        (setq across-buffer
          (get-buffer-create "Crossword across"))
        'norecord 'force))
-   (set-window-dedicated-p across-window t)
    (erase-buffer) ; Unnecessary, but satisfies neuroses.
    (face-remap-add-relative 'default :family "Monospace")
    ;; ** Create window and buffer for DOWN clues
@@ -1410,7 +1367,6 @@ puzzle's clues."
      (switch-to-buffer
        (setq down-buffer (get-buffer-create "Crossword down"))
        'norecord 'force))
-   (set-window-dedicated-p down-window t)
    (erase-buffer) ; Unnecessary, but satisfies neuroses.
    ;; ** Balance windows now so we can properly fill-paragraphs
    (balance-windows)
@@ -2442,10 +2398,7 @@ Prompt to save current state, then kill buffers, windows, and frame."
                (setq buf (get-buffer "Crossword grid")))
         (kill-buffer buf))
     (if crossword-quit-to-browser
-      (crossword-summary)
-       (ignore-errors
-         (select-frame-by-name "Crossword")
-         (delete-frame nil)))))
+      (crossword-summary))))
 
 
 
@@ -2462,18 +2415,10 @@ on their entry."
   (interactive)
   (unless (crossword--check-and-create-save-path)
     (crossword-quit))
-  (condition-case nil
-    (select-frame-by-name "Crossword")
-    (error
-      (select-frame (make-frame (list '(name . "Crossword"))))))
-;; FIXME: see TODO note at end of file
-;;    (setq delete-frame-functions #'crossword-quit)))
   (when (get-buffer "Crossword grid")
     (user-error "Game in progress"))
   (unless (get-buffer "Crossword list")
-    (set-window-dedicated-p nil nil)
     (pop-to-buffer (set-buffer (get-buffer-create "Crossword list")))
-    (set-window-dedicated-p nil t)
     (setq window-size-change-functions
       ;; FIXME: Maybe 'add-to-list' instead?
       (list #'crossword--window-resize-function))
@@ -2507,22 +2452,6 @@ arg DATE is expected to be a list of integers '(mm dd yyy)."
    ;; include a short note in an entry's description.
   (crossword--download (format-time-string (cadr (assoc from crossword-download-puz-alist)) date) crossword-save-path from))
 
-
-;;;###autoload
-(defun crossword-load ()
-  "Find (and play) a local crossword puzzle file.
-You probably don't want to use this command unless you have a
-file in a non-default directory (see `crossword-save-path') and
-want to keep it in its current location. If you've used
-`crossword-download' to get a puzzle, it should appear in the
-puzzle browser when the download completes."
-  (interactive)
-  (condition-case nil
-    (select-frame-by-name "Crossword")
-    (error
-      (crossword--start-game))))
-
-
 ;;;###autoload
 (defun crossword ()
   "Entry function for `crossword' mode.
@@ -2540,7 +2469,7 @@ completion details of played puzzles."
           (list (when (crossword--puzzle-file-list)
                   (cons "Use the local crossword browser" #'crossword-summary))
                 (cons "Download a crossword puzzle" #'crossword-download)
-                (cons "Directly load a crossword from a local file" #'crossword-load))))
+                (cons "Directly load a crossword from a local file" #'crossword--start-game))))
     (funcall (cdr (assoc-string
                     (completing-read     "Welcome to Emacs crossword! "
                       (mapcar (lambda (x) (car x)) choices) nil t (caar choices))
