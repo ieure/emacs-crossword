@@ -2385,7 +2385,7 @@ Default is to advance one column."
                         (point-min))))))
 
 
-(defun crossword-summary-delete()
+(defun crossword-summary-delete ()
   "Delete the puzzle file at POINT in a `crossword-summary' buffer."
   (interactive)
   (unless (eq major-mode 'crossword-summary-mode)
@@ -2398,7 +2398,7 @@ Default is to advance one column."
       (crossword--summary-revert-hook-function))))
 
 
-(defun crossword-summary-select()
+(defun crossword-summary-select ()
   "Play the puzzle at POINT in a `crossword-summary' buffer."
   (interactive)
   (unless (eq major-mode 'crossword-summary-mode)
