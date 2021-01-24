@@ -929,9 +929,7 @@ grid position, and updates the puzzle's completion statistics."
        (setq face-at-point (get-text-property (point) 'face)))
       (when (listp face-at-point)
         (put-text-property (point) (1+ (point)) 'face
-          (setq face-at-point (delq nil face-at-point)))))
-    (setq buffer-read-only t))
-
+          (setq face-at-point (delq nil face-at-point))))))
 
 (defun crossword--is-empty-square (&optional pos)
   "Return non-NIL if square at POS is considered 'empty'.
