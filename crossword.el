@@ -2418,9 +2418,6 @@ on their entry."
     (user-error "Game in progress"))
   (unless (get-buffer crossword--list-name)
     (pop-to-buffer (set-buffer (get-buffer-create crossword--list-name)))
-    (setq window-size-change-functions
-      ;; FIXME: Maybe 'add-to-list' instead?
-      (list #'crossword--window-resize-function))
     (setq buffer-read-only nil)
     (setq crossword--filename nil)
     (delete-other-windows)
