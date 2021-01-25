@@ -604,24 +604,23 @@ either 'across or 'down.")
   "Known crossword puzzles"
   "Mode for displayed crossword summary lists."
   (setq tabulated-list-format
-       `[("filename" 10 t)
-         ("extension" 9 t)
-         ("date" 10 t)
-         ("title" 30 t)
-         ("author" 30 t)
-         ("publisher/copyright" 25 t)
-         ("%%filled" 7 t :right-align t)
-         ("%%solved" 7 t :right-align t)
-         ("checked" 7 t :right-align t)
-         ("errors" 7 t :right-align t)
-         ("time" 5 t)])
-  (setq tabulated-list-sort-key (cons "date" 'flip))
-  (setq tabulated-list-padding 2)
-  (setq tabulated-list-entries #'crossword--summary-list-entries)
+        `[("filename" 10 t)
+          ("extension" 9 t)
+          ("date" 10 t)
+          ("title" 30 t)
+          ("author" 30 t)
+          ("publisher/copyright" 25 t)
+          ("%%filled" 7 t :right-align t)
+          ("%%solved" 7 t :right-align t)
+          ("checked" 7 t :right-align t)
+          ("errors" 7 t :right-align t)
+          ("time" 5 t)]
+        tabulated-list-sort-key (cons "date" 'flip)
+        tabulated-list-padding 2
+        tabulated-list-entries #'crossword--summary-list-entries)
   (add-hook 'tabulated-list-revert-hook #'crossword--summary-revert-hook-function nil t)
   (hl-line-mode)
   (tabulated-list-init-header))
-
 
 
 ;;
@@ -1469,8 +1468,8 @@ puzzle's clues."
    (if (string-match "\\.puz-emacs$" puz-file)
      (crossword-restore puz-file)
     (crossword--start-game-puz puz-file grid-window))
-   (setq buffer-read-only t)
-   (setq inhibit-read-only nil)))
+   (setq buffer-read-only t
+         inhibit-read-only nil)))
 
 
 (defun crossword--summary-list-entries ()
