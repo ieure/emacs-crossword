@@ -2166,33 +2166,7 @@ will be displayed at the bottom of the crossword grid window."
   "Check the word at POINT for errors.
 Similar to `crossword-check-letter', See there for details."
   (interactive)
-  (cond
-   ((eq crossword--nav-dir 'across)
-     (let* ((orig-pos (point))
-            (clue-num (get-text-property (point) 'clue-across))
-            (clue (assq clue-num crossword--across-clue-list))
-            (pos (nth 2 clue))
-            (end (nth 3 clue)))
-       (while (< pos end)
-         (goto-char pos)
-         (crossword-check-letter)
-         (setq pos (1+ pos)))
-       (goto-char orig-pos)))
-   ((eq crossword--nav-dir 'down)
-     (let* ((orig-pos (point))
-            (clue-num (get-text-property (point) 'clue-down))
-            (clue (assq clue-num crossword--down-clue-list))
-            pos
-            (pos-list (nth 2 clue)))
-       (while (setq pos (pop pos-list))
-         (goto-char pos)
-         (crossword-check-letter))
-       (goto-char orig-pos))))
-  (let ((inhibit-read-only t))
-    (crossword--update-grid-clues
-      (get-text-property (point) 'clue-across)
-      (get-text-property (point) 'clue-down))))
-
+  (save-excursion (crossword--mapchar #'crossword-check-letter)))
 
 (defun crossword-check-puzzle ()
   "Check the entire puzzle for errors.
@@ -2226,32 +2200,42 @@ It will highlighted per `crossword-solved-face'."
       (crossword--insert-char (string-to-char answer)))))
 
 
+(defun crossword--mapchar-across (f)
+  "Call F with point on successive characters of the current (across) word."
+  (let* ((clue-num (get-text-property (point) 'clue-across))
+         (clue (assq clue-num crossword--across-clue-list))
+         (pos (nth 2 clue))
+         (end (nth 3 clue)))
+    (while (< pos end)
+      (goto-char pos)
+      (funcall f)
+      (cl-incf pos 2))))
+
+
+(defun crossword--mapchar-down (f)
+  "Call F with point on successive characters of the current (down) word."
+  (let* ((clue-num (get-text-property (point) 'clue-down))
+         (clue (assq clue-num crossword--down-clue-list)))
+    (dolist (pos (nth 2 clue))
+      (goto-char pos)
+      (funcall f))))
+
+
+(defun crossword--mapchar (f)
+  "Call F with point on successive characters of the current word."
+  (cond
+   ((eq crossword--nav-dir 'across)
+    (crossword--mapchar-across f))
+
+   ((eq crossword--nav-dir 'down)
+    (crossword--mapchar-down f))))
+
+
 (defun crossword-solve-word ()
   "Solve the word at POINT.
 Similar to `crossword-solve-letter', See there for details."
   (interactive)
-  (cond
-   ((eq crossword--nav-dir 'across)
-     (let* ((orig-pos (point))
-            (clue-num (get-text-property (point) 'clue-across))
-            (clue (assq clue-num crossword--across-clue-list))
-            (pos (nth 2 clue))
-            (end (nth 3 clue)))
-       (while (< pos end)
-         (goto-char pos)
-         (crossword-solve-letter)
-         (cl-incf pos 2))
-       (goto-char orig-pos)))
-   ((eq crossword--nav-dir 'down)
-     (let* ((orig-pos (point))
-            (clue-num (get-text-property (point) 'clue-down))
-            (clue (assq clue-num crossword--down-clue-list))
-            pos
-            (pos-list (nth 2 clue)))
-       (while (setq pos (pop pos-list))
-         (goto-char pos)
-         (crossword-solve-letter))
-       (goto-char orig-pos)))))
+  (save-excursion (crossword--mapchar #'crossword-solve-letter)))
 
 
 (defun crossword-solve-puzzle ()
