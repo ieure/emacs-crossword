@@ -698,6 +698,14 @@ Only do so at points that have no other face."
   ;; FIXME: This seems no longer necessary
   (add-face-text-property start end 'crossword-current-face t))
 
+
+(defun crossword--recenter ()
+  "Recenter the current window."
+  (with-selected-window (get-buffer-window)
+    (recenter)
+    (while (pos-visible-in-window-p (point-max))
+      (scroll-down 1))))
+
 (defun crossword--update-faces (&optional force)
   "Called mainly as a `post-command-hook' function for `crossword-mode'.
 Called also by `crossword-restore', in which case the optional FORCE
@@ -708,83 +716,72 @@ This function operates upon all three crossword buffers, and
 expects the current buffer to be the crossword grid-buffer."
   (when (or (not (equal (point) crossword--prior-point))
             force)
-    (let ((grid-buffer (current-buffer))
-          (across-buffer crossword--across-buffer)
-          (down-buffer   crossword--down-buffer)
-          (nav-dir       crossword--nav-dir)
-          (inhibit-read-only t)
-          (return-pos (point))
+    (let ((inhibit-read-only t)
           (this-clue-across (get-text-property (point) 'clue-across))
           (this-clue-down (get-text-property (point) 'clue-down))
           clue prior-clue-num pos pos-max pos-list)
-      ;; Grid buffer: across calculations
-      (setq prior-clue-num (get-text-property crossword--prior-point 'clue-across))
-      (when (or (not (eq prior-clue-num this-clue-across))
-                force)
-        (when prior-clue-num
-          (setq clue (assq prior-clue-num crossword--across-clue-list)
-                pos (nth 2 clue)
-                pos-max (nth 3 clue))
-          (while (< pos pos-max)
-            (unless (and (eq nav-dir 'down) this-clue-down
-                         (eq this-clue-down
-                             (get-text-property pos 'clue-down)))
-              (crossword--face-current-remove pos (1+ pos)))
+      (save-excursion
+        ;; Grid buffer: across calculations
+        (setq prior-clue-num (get-text-property crossword--prior-point 'clue-across))
+        (when (or (not (eq prior-clue-num this-clue-across))
+                  force)
+          (when prior-clue-num
+            (setq clue (assq prior-clue-num crossword--across-clue-list)
+                  pos (nth 2 clue)
+                  pos-max (nth 3 clue))
+            (while (< pos pos-max)
+              (unless (and (eq crossword--nav-dir 'down) this-clue-down
+                           (eq this-clue-down
+                               (get-text-property pos 'clue-down)))
+                (crossword--face-current-remove pos (1+ pos)))
               (cl-incf pos))
-          (with-current-buffer across-buffer
-            (remove-text-properties (nth 4 clue) (nth 5 clue) '(face))))
-        (when this-clue-across
-          (setq clue (assq this-clue-across crossword--across-clue-list))
-          (when (eq nav-dir 'across)
-            (crossword--face-current-add (nth 2 clue) (nth 3 clue)))))
-      ;; Grid buffer: down calculations
-      (setq prior-clue-num (get-text-property crossword--prior-point 'clue-down))
-      (unless (eq prior-clue-num this-clue-down)
-        (when prior-clue-num
-          (setq clue (assq prior-clue-num crossword--down-clue-list))
-          (setq pos-list (nth 2 clue))
-          (while (setq pos (pop pos-list))
-            (unless (and (eq nav-dir 'across)
-                         (eq this-clue-across
-                             (get-text-property pos 'clue-across)))
-              (crossword--face-current-remove pos (1+ pos))))
-          (with-current-buffer down-buffer
-            (remove-text-properties (nth 3 clue) (nth 4 clue) '(face))))
-        (when this-clue-down
-          (setq clue (assq this-clue-down crossword--down-clue-list))
-          (when (eq nav-dir 'down)
+            (with-current-buffer crossword--across-buffer
+              (remove-text-properties (nth 4 clue) (nth 5 clue) '(face))))
+          (when this-clue-across
+            (setq clue (assq this-clue-across crossword--across-clue-list))
+            (when (eq crossword--nav-dir 'across)
+              (crossword--face-current-add (nth 2 clue) (nth 3 clue)))))
+        ;; Grid buffer: down calculations
+        (setq prior-clue-num (get-text-property crossword--prior-point 'clue-down))
+        (unless (eq prior-clue-num this-clue-down)
+          (when prior-clue-num
+            (setq clue (assq prior-clue-num crossword--down-clue-list))
             (setq pos-list (nth 2 clue))
             (while (setq pos (pop pos-list))
-              (crossword--face-current-add pos (1+ pos))))))
-      ;; Across-clues buffer
-      (when this-clue-across
-        (setq clue (assq this-clue-across crossword--across-clue-list))
-        (pop-to-buffer across-buffer)
-        (goto-char (nth 4 clue))
-        (put-text-property (point) (nth 5 clue)
-                           'face (if (eq nav-dir 'across)
-                                   'crossword-current-face
-                                  'crossword-other-dir-face))
-        (recenter)
-        (while (pos-visible-in-window-p (point-max))
-          (scroll-down 1)))
-      (pop-to-buffer grid-buffer) ;; to access buffer-local variable
-      ;; Down-clues buffer
-      (when this-clue-down
-        (setq clue (assq this-clue-down crossword--down-clue-list))
-        (pop-to-buffer down-buffer)
-        (goto-char (nth 3 clue))
-        (put-text-property (point) (nth 4 clue)
-                           'face (if (eq nav-dir 'down)
-                                   'crossword-current-face
-                                  'crossword-other-dir-face))
-        (recenter)
-        (while (pos-visible-in-window-p (point-max))
-          (scroll-down 1)))
-      ;; Grid clues (bottom of the grid buffer)
-      (pop-to-buffer grid-buffer)
-      (crossword--update-grid-clues this-clue-across this-clue-down)
-      (goto-char (setq crossword--prior-point (min return-pos (point-max)))))))
+              (unless (and (eq crossword--nav-dir 'across)
+                           (eq this-clue-across
+                               (get-text-property pos 'clue-across)))
+                (crossword--face-current-remove pos (1+ pos))))
+            (with-current-buffer crossword--down-buffer
+              (remove-text-properties (nth 3 clue) (nth 4 clue) '(face))))
+          (when this-clue-down
+            (setq clue (assq this-clue-down crossword--down-clue-list))
+            (when (eq crossword--nav-dir 'down)
+              (setq pos-list (nth 2 clue))
+              (while (setq pos (pop pos-list))
+                (crossword--face-current-add pos (1+ pos))))))
+        ;; Across-clues buffer
+        (when this-clue-across
+          (setq clue (assq this-clue-across crossword--across-clue-list))
+          (with-current-buffer crossword--across-buffer
+            (goto-char (nth 4 clue))
+            (put-text-property (point) (nth 5 clue)
+                               'face (if (eq crossword--nav-dir 'across)
+                                         'crossword-current-face
+                                       'crossword-other-dir-face))
+            (crossword--recenter)))
+
+        ;; Down-clues buffer
+        (when this-clue-down
+          (setq clue (assq this-clue-down crossword--down-clue-list))
+          (with-current-buffer crossword--down-buffer
+            (goto-char (nth 3 clue))
+            (put-text-property (point) (nth 4 clue)
+                               'face (if (eq crossword--nav-dir 'down)
+                                         'crossword-current-face
+                                       'crossword-other-dir-face))
+            (crossword--recenter)))
+        (crossword--update-grid-clues this-clue-across this-clue-down)))))
 
 
 (defun crossword--update-grid-clues (this-clue-across this-clue-down)
