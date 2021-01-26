@@ -1324,20 +1324,6 @@ header line."
       (goto-char (point-min))
       (nreverse new-clue-list))))
 
-
-(defun crossword--select-frame ()
-  "Select the \"Crossword\" frame, possibly creating it."
-  (unless (equal (frame-parameter nil 'name) "Crossword")
-    (condition-case nil
-      (select-frame-by-name "Crossword")
-      (error (select-frame
-               (make-frame (list '(name   . "Crossword")
-                                 '(menu-bar-lines .  0)
-                                 '(tool-bar-lines .  0)
-                                 '(height .  43)
-                                 '(width  . 140))))))))
-
-
 (defun crossword--recover-game-in-progress ()
   "Restore frame, windows, and buffers of a game in progress.
 If no game is in progress, returns to caller, otherwise signals a
@@ -1347,12 +1333,6 @@ If no game is in progress, returns to caller, otherwise signals a
     (when grid-buffer
       (message "Game in progress. Restoring...")
 ;;    ;; compare with `crossword--start-game' and consider consolidating code
-      (condition-case nil
-        (progn
-          (select-frame-by-name "Crossword")
-          (delete-frame nil 'force))
-        (error nil))
-      (crossword--select-frame)
       (delete-other-windows)
       (setq grid-window   (selected-window)
             across-window (split-window-right)
@@ -1467,13 +1447,6 @@ puzzle's clues."
      (while (not (file-readable-p
                    (setq puz-file
                      (read-file-name "Puzzle file: " nil nil t nil))))))
-   (crossword--select-frame)
-   (set-window-dedicated-p nil nil)
-;; FIXME: see TODO note at end of file
-;; (setq delete-frame-functions (list #'crossword-quit))
-   (setq window-size-change-functions
-     ;; FIXME: Maybe 'add-to-list' instead?
-     (list #'crossword--window-resize-function))
    ;; Create window and buffer for grid
    (setq grid-window (selected-window))
    (buffer-disable-undo
