@@ -86,8 +86,8 @@
 ;;  `crossword-wrap-on-entry-or-nav', `crossword-tab-to-next-unfilled'
 ;;  `crossword-auto-nav-only-within-clue'.
 
-;;  If don't usually play more than one crossword in a sitting, you
-;;  may want to set `crossword-quit-to-browser' to NIL to save
+;;  If you don't usually play more than one crossword in a sitting,
+;;  you may want to set `crossword-quit-to-browser' to NIL to save
 ;;  yourself a keystroke on exit.
 
 ;;  You can also customize the download sources to be used for network
@@ -142,6 +142,11 @@
 ;;                 M-q           crossword-quit
 ;;                 C-x C-s       crossword-backup
 ;;                 C-c C-x C-f   crossword-restore
+;;
+;; If, while playing, you delete the crossword frame or one of its
+;; windows, you can use command M-x `crossword-recover-game-in-progress'.
+;; If you kill a clue buffer, you'll need to save, quit, and restore
+;; the saved game.
 ;;
 ;; General navigation within the grid buffer should be intuitive, using
 ;; all the usual keys. Additionally, filling in a square will advance
@@ -424,6 +429,7 @@ NOTE: Support for this file format has not yet been written!"
    (t   (:background "darkgreen" :foreground "black" :inherit 'normal)))
  "For the current clue and word.")
 
+
 (defface crossword-other-dir-face
  '((((class color) (background light))
         (:background "darkgrey" :foreground "black" :inherit 'normal))
@@ -437,13 +443,16 @@ NOTE: Support for this file format has not yet been written!"
  '((t (:background "red" :foreground "black" :inherit 'normal)))
  "For a letter that has been checked and is wrong.")
 
+
 (defface crossword-error-inverse-face
  '((t (:inverse-video t :inherit 'crossword-error-face)))
  "For a letter that has been checked and is wrong.")
 
+
 (defface crossword-checked-face
  '((t (:foreground "cyan" :inherit 'normal)))
  "For a letter that has been checked and is correct.")
+
 
 (defface crossword-solved-face
  '((((class color) (background light))
@@ -452,6 +461,16 @@ NOTE: Support for this file format has not yet been written!"
         (:foreground "brightyellow" :inherit 'normal))
    (t   (:foreground "brightyellow" :inherit 'normal)))
  "For a letter that the user has asked to be solved.")
+
+
+(defface crossword-grid-face
+ '((((class color) (background light))
+        (:foreground "blue" :inherit 'normal))
+   (((class color) (background dark))
+        (:foreground "blue" :inherit 'normal))
+   (t   (:foreground "blue" :inherit 'normal)))
+ "For un-writable squares and grid-lines.")
+
 
 
 ;;
@@ -608,6 +627,7 @@ either 'across or 'down.")
     (define-key map (kbd "g")      'crossword-summary-revert-buffer)
     (define-key map (kbd "S")      'crossword-summary-sort)
     map))
+
 
 (define-derived-mode crossword-mode fundamental-mode "Crossword"
   "Operate on puz file format crossword puzzles.
@@ -838,6 +858,36 @@ See mode `crossword-summary-mode'."
   (tabulated-list-init-header)
   (tabulated-list-print t)
   (recenter))
+
+
+
+;;
+;;; Advice functions
+
+(defun crossword--advice-before-self-insert-command (_N &optional _C)
+  "Advice for handling insertions in the 'Crossword grid' buffer.
+
+While this function needs no arguments, the advised function
+does: For Emacs v26 that command takes a single argument _N, and for
+Emacs v28(snapshot) it takes an additional optional _C.
+
+The function is somewhat of a kludge, which is a shame since it's
+the central-most part of the package, as it controls data-entry,
+fontification, advances POINT to the next grid position, and
+updates the puzzle's completion statistics. The kludge works
+because it sets variable `last-input-event' to nil after using
+its value, and because it exits with function `keyboard-quit' to
+abort the advised function from ever actually being called. Note
+that this has the unwanted side effect of sending \"Quit\"
+messages to the echo are and to the messages buffer."
+  (when (and (eq major-mode 'crossword-mode)
+             (get-text-property (point) 'answer)
+             (not (get-text-property (point) 'solved)))
+    (crossword--insert-char)
+    (if crossword-auto-nav-only-within-clue
+      (crossword--next-square-in-clue 'wrap)
+     (crossword--next-logical-square))
+    (keyboard-quit)))
 
 
 
@@ -1157,12 +1207,21 @@ variables `crossword--across-clue-list' and
 `crossword--down-clue-list'. GRID-WIDTH is an integer taken from
 the puzzle file encoding. COLOPHON, CLEAN-GRID, ANSWER-GRID and CLUE-LIST
 are substrings of the puzzle file."
-  (let* ((block-cell (concat crossword-empty-position-char "|"))
-         (crossword-new-line (concat block-cell "\n|" block-cell))
+  (let* ((divider "|")
+         (block-cell (concat crossword-empty-position-char divider))
          (block-line
            (concat (replace-regexp-in-string
                       "-" block-cell
                       (make-string (+ 1 grid-width) ?-))))
+         ;; FIXME: This does not work with lexical binding, so for now the
+         ;;        propertizing is done individually with the let*.
+         ;; (dolist (var (list 'divider 'block-cell 'crossword-new-line 'block-line))
+         ;;   (set var (propertize (symbol-value var) 'face 'crossword-grid-face)))
+         (divider    (propertize divider 'face 'crossword-grid-face))
+         (block-cell (propertize block-cell 'face 'crossword-grid-face))
+         (block-line (propertize block-line 'face 'crossword-grid-face))
+         ;; END: FIXME
+         (crossword-new-line (concat block-cell "\n" divider block-cell))
          (clue-across 0)
          (clue-down 0)
          start-pos pos)
@@ -1184,7 +1243,7 @@ are substrings of the puzzle file."
           crossword--solved-percent-pos     (+ 52 start-pos)
           crossword--checked-count-pos      (+ 77 start-pos)
           crossword--error-count-pos        (+ 90 start-pos))
-    (insert "|" block-line)
+    (insert divider block-line)
     (insert crossword-new-line)
     (setq start-pos (point)
           pos start-pos)
@@ -1196,7 +1255,7 @@ are substrings of the puzzle file."
     (insert block-line)
     (goto-char start-pos)
     (while (search-forward "-" nil t)
-       (insert "|"))
+       (insert divider))
     (when (and crossword-empty-position-char
                (= 1 (length crossword-empty-position-char)))
       (goto-char start-pos)
@@ -1264,6 +1323,61 @@ header line."
       (setq buffer-read-only t)
       (goto-char (point-min))
       (nreverse new-clue-list))))
+
+
+(defun crossword--select-frame ()
+  "Select the \"Crossword\" frame, possibly creating it."
+  (unless (equal (frame-parameter nil 'name) "Crossword")
+    (condition-case nil
+      (select-frame-by-name "Crossword")
+      (error (select-frame
+               (make-frame (list '(name   . "Crossword")
+                                 '(menu-bar-lines .  0)
+                                 '(tool-bar-lines .  0)
+                                 '(height .  43)
+                                 '(width  . 140))))))))
+
+
+(defun crossword--recover-game-in-progress ()
+  "Restore frame, windows, and buffers of a game in progress.
+If no game is in progress, returns to caller, otherwise signals a
+`user-error'."
+  (let ((grid-buffer (get-buffer "Crossword grid"))
+        grid-window across-window down-window)
+    (when grid-buffer
+      (message "Game in progress. Restoring...")
+;;    ;; compare with `crossword--start-game' and consider consolidating code
+      (condition-case nil
+        (progn
+          (select-frame-by-name "Crossword")
+          (delete-frame nil 'force))
+        (error nil))
+      (crossword--select-frame)
+      (delete-other-windows)
+      (setq grid-window   (selected-window)
+            across-window (split-window-right)
+            down-window   (split-window-right))
+      (set-window-dedicated-p nil nil)
+      (switch-to-buffer grid-buffer 'norecord 'force)
+      (set-window-dedicated-p nil t)
+      (select-window across-window)
+      (set-window-dedicated-p nil nil)
+      (buffer-disable-undo
+        (switch-to-buffer
+          (setq crossword--across-buffer
+            (get-buffer-create  "Crossword across"))
+          'norecord 'force))
+      (set-window-dedicated-p nil t)
+      (select-window down-window)
+      (set-window-dedicated-p nil nil)
+      (buffer-disable-undo
+        (switch-to-buffer
+          (setq crossword--down-buffer
+            (get-buffer-create  "Crossword down"))
+          'norecord 'force))
+      (set-window-dedicated-p nil t)
+      (user-error "Game in progress. Restoring... complete"))))
+;; BUG creates scratch buffer window
 
 
 (defun crossword--start-game-puz (puz-file grid-window)
@@ -1349,6 +1463,17 @@ Buffers \"Crossword across\" and \"Crossword down\" list the
 puzzle's clues."
   (let (grid-window across-window down-window
         across-buffer down-buffer)
+   (unless puz-file
+     (while (not (file-readable-p
+                   (setq puz-file
+                     (read-file-name "Puzzle file: " nil nil t nil))))))
+   (crossword--select-frame)
+   (set-window-dedicated-p nil nil)
+;; FIXME: see TODO note at end of file
+;; (setq delete-frame-functions (list #'crossword-quit))
+   (setq window-size-change-functions
+     ;; FIXME: Maybe 'add-to-list' instead?
+     (list #'crossword--window-resize-function))
    ;; Create window and buffer for grid
    (setq grid-window (selected-window))
    (buffer-disable-undo
@@ -2354,6 +2479,17 @@ Default is to advance one column."
     (crossword--start-game puz-file)))
 
 
+(defun crossword-recover-game-in-progress ()
+  "Attempt to recover an 'deleted' game.
+In this context, 'deleted' means that either the frame or its
+clue buffer(s) was/were deleted.
+
+At present, if a clue buffer is deleted, the recovery procedure
+is to save, quit, and restart the game. "
+  (interactive)
+  (crossword--recover-game-in-progress))
+
+
 (defun crossword-quit ()
   "Gracefully exit crossword play.
 Prompt to save current state, then kill buffers, windows, and frame."
@@ -2445,6 +2581,7 @@ From the puzzle browser one can load a puzzle to play by selecting
 it. The browser presents all puzzles' metadata including
 completion details of played puzzles."
   (interactive)
+  (crossword--recover-game-in-progress)
   (unless (crossword--check-and-create-save-path)
     (user-error "No existing download path configured"))
   (let ((choices
