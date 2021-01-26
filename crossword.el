@@ -2260,9 +2260,8 @@ Similar to `crossword-solve-letter', See there for details."
   (interactive)
   (when crossword--timer-object
     (crossword-pause-unpause-timer))
-  (let ((pos crossword--first-square)
-        (end (+ 2 crossword--last-square)))
-    (goto-char pos)
+  (let ((end (+ 2 crossword--last-square)))
+    (goto-char crossword--first-square)
     (while (re-search-forward crossword--grid-characters end t)
       (backward-char)
       (crossword-solve-letter)
