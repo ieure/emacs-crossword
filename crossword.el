@@ -1239,23 +1239,23 @@ either 'clue-across or 'clue-down. CLUE-LIST is either the data
 structure `crossword--across-clue-list' or
 `crossword--down-clue-list'. HEADER is a string for the buffer's
 header line."
-  (set-buffer buf)
-  (erase-buffer)
-  (let ((fill-prefix "    ")
-        (fill-column (- (window-text-width) 2))
-        (pos (point-min))
-        new-clue-data new-clue-list)
-    (setq header-line-format header)
-    (dolist (clue clue-list)
-      (insert (propertize (format "%3s  %s\n\n" (car clue) (cadr clue))
-                          prop (car clue)))
-      (fill-region pos (point))
-      (setq new-clue-data (append clue (list pos (1- (point)))))
-      (push new-clue-data new-clue-list)
-      (setq pos (point)))
-    (setq buffer-read-only t)
-    (goto-char (point-min))
-    (nreverse new-clue-list)))
+  (with-current-buffer buf
+    (erase-buffer)
+    (let ((fill-prefix "    ")
+          (fill-column (- (window-text-width) 2))
+          (pos (point-min))
+          new-clue-data new-clue-list)
+      (setq header-line-format header)
+      (dolist (clue clue-list)
+        (insert (propertize (format "%3s  %s\n\n" (car clue) (cadr clue))
+                            prop (car clue)))
+        (fill-region pos (point))
+        (setq new-clue-data (append clue (list pos (1- (point)))))
+        (push new-clue-data new-clue-list)
+        (setq pos (point)))
+      (setq buffer-read-only t)
+      (goto-char (point-min))
+      (nreverse new-clue-list))))
 
 
 (defun crossword--start-game-puz (puz-file grid-window)
@@ -1463,17 +1463,22 @@ See function `crossword-summary-rebuild-data' for details."
              (getval crossword--timer-value-pos 5)))))
 
 
+(defun crossword--read-puz-emacs (file)
+  "Read data from FILE, saved by `crossword-backup'.
+Returns a list of: (PUZ-BUFFER-CONTENT POINT VARS)."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (let ((out nil))
+      ;; Buffer contents
+      (while (not (eobp))
+        (push (read (current-buffer)) out))
+      (nreverse out))))
+
+
 (defun crossword--summary-data-puz-emacs (file)
   "Get summary data for .puz-emacs FILE.
 See function `crossword-summary-rebuild-data' for details."
-  (cl-destructuring-bind (puz data)
-      (with-temp-buffer
-        (insert-file-contents file)
-        (let ((out nil))
-          (push (read (current-buffer)) out)
-          (read (current-buffer))
-          (push (read (current-buffer)) out)
-          (nreverse out)))
+  (cl-destructuring-bind (puz _ data) (crossword--read-puz-emacs file)
 
     (with-temp-buffer
       (insert puz)
@@ -2083,33 +2088,23 @@ crossword frame/windows/buffers environment exists."
   (interactive (list (read-file-name "Puzzle file to restore: "
                                      crossword-save-path nil t nil
                                      (lambda (x) (string-match "\\.puz-emacs$" x)))))
-  (let* ((across-buffer crossword--across-buffer)
-         (down-buffer   crossword--down-buffer)
-         (inhibit-read-only t)
-         grid-pos
-         across-clue-list down-clue-list)
+  (let* ((inhibit-read-only t))
+    (erase-buffer)
+    (cl-destructuring-bind (puz point data) (crossword--read-puz-emacs file)
+      (insert puz)
+      (dolist (elem data)
+        (set (car elem) (cdr elem)))
 
-   (erase-buffer)
-   (insert (with-temp-buffer (insert-file-contents file)
-                             (read (current-buffer))))
-   (setq grid-pos (read temp-buf))
-   (dolist (elem (read temp-buf))
-     (set (car elem) (cdr elem)))
-   (kill-buffer temp-buf)
-   (setq across-clue-list crossword--across-clue-list
-         down-clue-list   crossword--down-clue-list
-         crossword--across-buffer across-buffer
-         crossword--down-buffer   down-buffer)
-   (crossword--insert-clues across-buffer
-                            'clue-across
-                            across-clue-list
-                            "--- Across clues for crossword")
-   (crossword--insert-clues down-buffer
-                            'clue-down
-                            down-clue-list
-                            "--- Down clues for crossword")
-   (goto-char grid-pos)
-   (crossword--update-faces 'force)))
+      (crossword--insert-clues crossword--across-buffer
+                               'clue-across
+                               crossword--across-clue-list
+                               "--- Across clues for crossword")
+      (crossword--insert-clues crossword--down-buffer
+                               'clue-down
+                               crossword--down-clue-list
+                               "--- Down clues for crossword")
+      (goto-char point)
+      (crossword--update-faces 'force))))
 
 
 (defun crossword-check-letter ()
