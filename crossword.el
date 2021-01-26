@@ -417,11 +417,19 @@ NOTE: Support for this file format has not yet been written!"
 ;;; Faces
 
 (defface crossword-current-face
- '((t (:background "darkgreen" :foreground "black" :inherit 'normal)))
+ '((((class color) (background light))
+        (:background "lightgreen" :foreground "black" :inherit 'normal))
+   (((class color) (background dark))
+        (:background "darkgreen" :foreground "black" :inherit 'normal))
+   (t   (:background "darkgreen" :foreground "black" :inherit 'normal)))
  "For the current clue and word.")
 
 (defface crossword-other-dir-face
- '((t (:background "brightblack" :foreground "black" :inherit 'normal)))
+ '((((class color) (background light))
+        (:background "darkgrey" :foreground "black" :inherit 'normal))
+   (((class color) (background dark))
+        (:background "brightblack" :foreground "black" :inherit 'normal))
+   (t   (:background "brightblack" :foreground "black" :inherit 'normal)))
  "For the current clue and word.")
 
 
@@ -438,7 +446,11 @@ NOTE: Support for this file format has not yet been written!"
  "For a letter that has been checked and is correct.")
 
 (defface crossword-solved-face
- '((t (:foreground "brightyellow" :inherit 'normal)))
+ '((((class color) (background light))
+        (:background "cyan" :inherit 'normal))
+   (((class color) (background dark))
+        (:foreground "brightyellow" :inherit 'normal))
+   (t   (:foreground "brightyellow" :inherit 'normal)))
  "For a letter that the user has asked to be solved.")
 
 
@@ -845,7 +857,6 @@ sucess."
       (make-directory  save-dir t)
       (setq crossword-save-path (file-name-as-directory save-dir)))
     (t nil))))
-
 
 
 (defun crossword-self-insert (char)
@@ -2477,6 +2488,9 @@ completion details of played puzzles."
 ;;         One buffer each for across and down clues."
 ;;           :type  'bool
 ;;           :group 'crossword)
+
+;; TODO: Faces: It may be a bug how 'checked' is (not)used in favor of
+;;       'solved'
 
 ;; TODO: Fix annoying flickering of display when navigating.
 
